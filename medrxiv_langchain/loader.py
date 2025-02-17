@@ -87,10 +87,21 @@ class BioRxivLoader(BaseLoader):
         return session
 
     def _build_api_url(self, cursor: str = "0") -> str:
-        """Build the API URL with proper encoding."""
-        base_url = "https://api.biorxiv.org/"
-        path = f"details/{self.server}/{self.start_date}/{self.end_date}/{cursor}/{self.sort_by}"
-        return urllib.parse.urljoin(base_url, path)
+    """Build the API URL with proper encoding."""
+    base_url = "https://api.biorxiv.org/search/"
+    # Use search endpoint instead of details
+    path = f"{self.server}/{self.start_date}/{self.end_date}/{cursor}"
+    url = urllib.parse.urljoin(base_url, path)
+    
+    # Add query and sort parameters
+    params = {
+        'text': self.query,
+        'sort': self.sort_by
+    }
+    
+    # Encode parameters properly
+    query_string = urllib.parse.urlencode(params)
+    return f"{url}?{query_string}"
 
     def _fetch_data(self, url: str) -> Dict[str, Any]:
         """Fetch data from the API with error handling."""

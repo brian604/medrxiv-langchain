@@ -1,50 +1,147 @@
-from typing import List, Any, Dict, Optional, Literal
+from typing import List, Any, Dict, Optional, Union, Literal
 import requests
-from datetime import datetime
+from datetime import datetime, timedelta
 import pandas as pd
 from langchain.document_loaders.base import BaseLoader
 from langchain.schema import Document
 from requests.adapters import HTTPAdapter
 from requests.packages.urllib3.util.retry import Retry
 import urllib.parse
+from concurrent.futures import ThreadPoolExecutor
+import itertools
+
+class QueryBuilder:
+    """Builder class for constructing BioRxiv/MedRxiv queries."""
+    
+    def __init__(self):
+        self._start_date: Optional[str] = None
+        self._end_date: Optional[str] = None
+        self._recent_papers: Optional[int] = None
+        self._recent_days: Optional[int] = None
+        self._servers: List[str] = ["biorxiv"]  # Default to biorxiv
+        
+    def date_range(self, start_date: str, end_date: str) -> 'QueryBuilder':
+        """Set date range for the query."""
+        self._validate_date(start_date)
+        self._validate_date(end_date)
+        self._start_date = start_date
+        self._end_date = end_date
+        return self
+    
+    def most_recent(self, count: int) -> 'QueryBuilder':
+        """Get most recent N papers."""
+        if count <= 0:
+            raise ValueError("Count must be positive")
+        self._recent_papers = count
+        return self
+    
+    def last_days(self, days: int) -> 'QueryBuilder':
+        """Get papers from last N days."""
+        if days <= 0:
+            raise ValueError("Days must be positive")
+        self._recent_days = days
+        return self
+    
+    def from_servers(self, servers: Union[str, List[str]]) -> 'QueryBuilder':
+        """Specify which servers to query (biorxiv and/or medrxiv)."""
+        if isinstance(servers, str):
+            servers = [servers]
+        
+        for server in servers:
+            if server.lower() not in ["biorxiv", "medrxiv"]:
+                raise ValueError("Server must be either 'biorxiv' or 'medrxiv'")
+        
+        self._servers = [s.lower() for s in servers]
+        return self
+    
+    def build(self) -> Dict[str, Any]:
+        """Build the query parameters."""
+        if sum(x is not None for x in [self._recent_papers, self._recent_days, self._start_date]) > 1:
+            raise ValueError("Cannot combine different query types. Use either date_range, most_recent, or last_days.")
+        
+        query: Optional[str] = None
+        start_date: Optional[str] = None
+        end_date: Optional[str] = None
+        
+        if self._recent_papers is not None:
+            query = str(self._recent_papers)
+        elif self._recent_days is not None:
+            query = f"{self._recent_days}d"
+        else:
+            start_date = self._start_date or (datetime.now() - timedelta(days=30)).strftime("%Y-%m-%d")
+            end_date = self._end_date or datetime.now().strftime("%Y-%m-%d")
+        
+        return {
+            "query": query,
+            "start_date": start_date,
+            "end_date": end_date,
+            "servers": self._servers
+        }
+    
+    @staticmethod
+    def _validate_date(date_str: str) -> None:
+        """Validate date format."""
+        try:
+            datetime.strptime(date_str, "%Y-%m-%d")
+        except ValueError as e:
+            raise ValueError(
+                f"Invalid date format: {date_str}. Date must be in YYYY-MM-DD format"
+            ) from e
+
 
 class BioRxivLoader(BaseLoader):
     """
     Loader for fetching documents from BioRxiv and MedRxiv.
     
     This loader supports both BioRxiv and MedRxiv repositories with robust error handling,
-    automatic retries, comprehensive metadata extraction, and sorting options.
+    automatic retries, and comprehensive metadata extraction.
     """
     
     def __init__(
         self,
-        query: str,
-        start_date: str = "2020-01-01",
-        end_date: str = "2025-12-31",
-        server: str = "biorxiv",
+        query_builder: Optional[QueryBuilder] = None,
+        query: Optional[str] = None,
+        start_date: Optional[str] = None,
+        end_date: Optional[str] = None,
+        servers: Union[str, List[str]] = "biorxiv",
         max_results: Optional[int] = None,
         timeout: int = 30,
-        sort_by: Literal["date", "rel"] = "date"
+        max_workers: int = 2
     ):
         """
         Initialize the BioRxivLoader.
 
         Args:
-            query (str): The search query.
-            start_date (str): The start date for the search (format: YYYY-MM-DD).
-            end_date (str): The end date for the search (format: YYYY-MM-DD).
-            server (str): The server to query from ('biorxiv' or 'medrxiv').
-            max_results (Optional[int]): Maximum number of results to fetch. None for all available.
-            timeout (int): Timeout for API requests in seconds.
-            sort_by (str): Sort results by 'date' (newest first) or 'rel' (relevance).
+            query_builder (Optional[QueryBuilder]): QueryBuilder instance for complex queries
+            query (Optional[str]): Simple query string (ignored if query_builder is provided)
+            start_date (Optional[str]): Start date (ignored if query_builder is provided)
+            end_date (Optional[str]): End date (ignored if query_builder is provided)
+            servers (Union[str, List[str]]): Server(s) to query from
+            max_results (Optional[int]): Maximum number of results to fetch
+            timeout (int): Timeout for API requests in seconds
+            max_workers (int): Maximum number of parallel workers for multiple servers
         """
-        self.query = query
-        self.start_date = self._validate_date(start_date)
-        self.end_date = self._validate_date(end_date)
-        self.server = self._validate_server(server)
+        if query_builder:
+            params = query_builder.build()
+            self.query = params["query"]
+            self.start_date = params["start_date"]
+            self.end_date = params["end_date"]
+            self.servers = params["servers"]
+        else:
+            self.query = query
+            self.start_date = start_date
+            self.end_date = end_date
+            self.servers = [servers] if isinstance(servers, str) else servers
+            self.servers = [s.lower() for s in self.servers]
+        
         self.max_results = max_results
         self.timeout = timeout
-        self.sort_by = self._validate_sort_by(sort_by)
+        self.max_workers = max_workers
+        
+        # Validate servers
+        for server in self.servers:
+            if server not in ["biorxiv", "medrxiv"]:
+                raise ValueError("Server must be either 'biorxiv' or 'medrxiv'")
         
         # Setup retry strategy
         self.session = self._setup_session()
@@ -66,13 +163,6 @@ class BioRxivLoader(BaseLoader):
             raise ValueError("Server must be either 'biorxiv' or 'medrxiv'")
         return server
 
-    def _validate_sort_by(self, sort_by: str) -> str:
-        """Validate sort_by parameter."""
-        sort_by = sort_by.lower()
-        if sort_by not in ["date", "rel"]:
-            raise ValueError("sort_by must be either 'date' or 'rel'")
-        return sort_by
-
     def _setup_session(self) -> requests.Session:
         """Setup requests session with retry strategy."""
         retry_strategy = Retry(
@@ -86,22 +176,23 @@ class BioRxivLoader(BaseLoader):
         session.mount("https://", adapter)
         return session
 
-    def _build_api_url(self, cursor: str = "0") -> str:
-    """Build the API URL with proper encoding."""
-    base_url = "https://api.biorxiv.org/search/"
-    # Use search endpoint instead of details
-    path = f"{self.server}/{self.start_date}/{self.end_date}/{cursor}"
-    url = urllib.parse.urljoin(base_url, path)
-    
-    # Add query and sort parameters
-    params = {
-        'text': self.query,
-        'sort': self.sort_by
-    }
-    
-    # Encode parameters properly
-    query_string = urllib.parse.urlencode(params)
-    return f"{url}?{query_string}"
+    def _build_api_url(self, server: str, cursor: str = "0") -> str:
+        """Build the API URL according to the query type."""
+        base_url = "https://api.biorxiv.org/details/"
+        
+        # Determine the interval based on query type
+        if self.query and (self.query.isdigit() or self.query.endswith('d')):
+            # Case 1: N most recent papers or N days
+            interval = self.query
+        elif self.start_date and self.end_date:
+            # Case 2: Date range
+            interval = f"{self.start_date}/{self.end_date}"
+        else:
+            # Default: last 30 days if no specific query
+            interval = "30d"
+        
+        path = f"{server}/{interval}/{cursor}"
+        return urllib.parse.urljoin(base_url, path)
 
     def _fetch_data(self, url: str) -> Dict[str, Any]:
         """Fetch data from the API with error handling."""
@@ -126,7 +217,7 @@ class BioRxivLoader(BaseLoader):
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"Failed to fetch data from API: {str(e)}") from e
 
-    def _process_item(self, item: Dict[str, Any]) -> Document:
+    def _process_item(self, item: Dict[str, Any], server: str) -> Document:
         """Process a single API response item into a Document."""
         # Extract content (combine abstract and title for better context)
         content = f"Title: {item.get('title', '')}\n\nAbstract: {item.get('abstract', '')}"
@@ -145,9 +236,9 @@ class BioRxivLoader(BaseLoader):
             "type": item.get("type", ""),
             "license": item.get("license", ""),
             "published": item.get("published", ""),
-            "server": self.server,
-            "link_page": f"https://www.{self.server}.org/content/{item.get('doi', '')}v{item.get('version', '')}",
-            "link_pdf": f"https://www.{self.server}.org/content/{item.get('doi', '')}v{item.get('version', '')}.full.pdf"
+            "server": server,
+            "link_page": f"https://www.{server}.org/content/{item.get('doi', '')}v{item.get('version', '')}",
+            "link_pdf": f"https://www.{server}.org/content/{item.get('doi', '')}v{item.get('version', '')}.full.pdf"
         }
         
         return Document(page_content=content, metadata=metadata)
@@ -155,6 +246,7 @@ class BioRxivLoader(BaseLoader):
     def load(self) -> List[Document]:
         """
         Fetch results from the BioRxiv/MedRxiv API and convert them into Document objects.
+        If multiple servers are specified, fetches from all servers in parallel.
 
         Returns:
             List[Document]: A list of documents containing the article content and metadata.
@@ -163,17 +255,36 @@ class BioRxivLoader(BaseLoader):
             ConnectionError: If there are network connectivity issues
             ValueError: If there are problems with the input parameters or API response
         """
+        if len(self.servers) == 1:
+            return self._load_from_server(self.servers[0])
+        
+        # Fetch from multiple servers in parallel
+        with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
+            results = list(executor.map(self._load_from_server, self.servers))
+        
+        # Combine and sort results by date
+        combined_docs = list(itertools.chain.from_iterable(results))
+        combined_docs.sort(key=lambda x: x.metadata["date"], reverse=True)
+        
+        # Apply max_results after combining
+        if self.max_results:
+            combined_docs = combined_docs[:self.max_results]
+        
+        return combined_docs
+    
+    def _load_from_server(self, server: str) -> List[Document]:
+        """Load documents from a specific server."""
         documents: List[Document] = []
         cursor = "0"
         total_fetched = 0
         
         while True:
-            url = self._build_api_url(cursor)
+            url = self._build_api_url(server, cursor)
             data = self._fetch_data(url)
             
             # Process items
             for item in data.get("collection", []):
-                documents.append(self._process_item(item))
+                documents.append(self._process_item(item, server))
                 total_fetched += 1
                 
                 if self.max_results and total_fetched >= self.max_results:

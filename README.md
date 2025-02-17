@@ -125,3 +125,96 @@ The loader includes robust error handling:
 ## Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
+
+## Integration Examples
+
+### 1. Paper Summarization with LangChain
+
+```python
+from langchain.chat_models import ChatOpenAI
+from langchain.prompts import PromptTemplate
+from medrxiv_langchain import QueryBuilder, BioRxivLoader
+
+# Get recent AI papers from both servers
+query = (QueryBuilder()
+         .last_days(30)
+         .from_servers(["biorxiv", "medrxiv"])
+         .build())
+
+loader = BioRxivLoader(query_builder=query, max_results=5)
+documents = loader.load()
+
+# Create a summarization chain
+llm = ChatOpenAI(temperature=0.7)
+prompt = PromptTemplate(
+    input_variables=["title", "abstract"],
+    template="""
+    Summarize this scientific paper in 3-4 bullet points:
+    Title: {title}
+    Abstract: {abstract}
+    
+    Key Points:"""
+)
+
+chain = prompt | llm
+
+# Generate summaries
+for doc in documents:
+    summary = chain.run(
+        title=doc.metadata["title"],
+        abstract=doc.page_content
+    )
+    print(f"\nPaper: {doc.metadata['title']}")
+    print(f"Authors: {doc.metadata['authors']}")
+    print(f"Link: {doc.metadata['link_page']}")
+    print(f"Summary:\n{summary}")
+```
+
+## Best Practices
+
+1. **Rate Limiting**: The loader includes automatic retries, but be mindful of API rate limits:
+   ```python
+   loader = BioRxivLoader(
+       query_builder=query,
+       timeout=30,
+       max_workers=2  # Limit parallel requests
+   )
+   ```
+
+2. **Error Handling**: Always handle potential errors:
+   ```python
+   try:
+       loader = BioRxivLoader(query_builder=query)
+       documents = loader.load()
+   except ValueError as e:
+       print(f"Invalid parameters: {e}")
+   except ConnectionError as e:
+       print(f"API connection error: {e}")
+   ```
+
+3. **Efficient Queries**: Use specific date ranges or limits to avoid fetching too much data:
+   ```python
+   # Good: Specific date range
+   query = QueryBuilder().date_range("2024-01-01", "2024-02-17").build()
+   
+   # Good: Limited recent papers
+   query = QueryBuilder().most_recent(100).build()
+   
+   # Avoid: Very large date ranges without limits
+   # query = QueryBuilder().date_range("2000-01-01", "2024-02-17").build()
+   ```
+
+4. **Metadata Usage**: Make use of rich metadata for better analysis:
+   ```python
+   for doc in documents:
+       # Check if paper is published
+       if doc.metadata['published']:
+           print(f"Published paper: {doc.metadata['title']}")
+           
+       # Get PDF link for latest version
+       pdf_link = doc.metadata['link_pdf']
+       
+       # Check paper category
+       if doc.metadata['category'] == 'bioinformatics':
+           print(f"Bioinformatics paper: {doc.metadata['title']}")
+   ```

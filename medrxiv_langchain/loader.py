@@ -179,23 +179,35 @@ class BioRxivLoader(BaseLoader):
 
     def _build_api_url(self, server: str, cursor: str = "0") -> str:
         """Build the API URL according to the query type."""
-        base_url = "https://api.biorxiv.org/details/"
-        
-        # Determine the interval based on query type
-        if self.query and (self.query.isdigit() or self.query.endswith('d')):
-            # For N most recent papers or N days, use the query directly as interval
-            interval = self.query
-        elif self.start_date and self.end_date:
-            # For date range, combine dates with '/'
-            interval = f"{self.start_date}/{self.end_date}"
+        # Use search endpoint if we have a keyword query
+        if self.query and not (self.query.isdigit() or self.query.endswith('d')):
+            base_url = "https://api.biorxiv.org/search/"
+            # Search endpoint format: /search/[server]/[interval]/[cursor]
+            interval = f"{self.start_date}/{self.end_date}" if self.start_date and self.end_date else "2000-01-01/2030-12-31"
+            path = f"{server}/{interval}/{cursor}"
+            url = urllib.parse.urljoin(base_url, path)
+            # Add search text parameter
+            params = {'text': self.query}
+            return f"{url}?{urllib.parse.urlencode(params)}"
         else:
-            # Default to last 30 days
-            interval = "30d"
-        
-        # Format: https://api.biorxiv.org/details/[server]/[interval]/[cursor]
-        path = f"{server}/{interval}/{cursor}/json"
-        url = urllib.parse.urljoin(base_url, path)
-        return url
+            # Use details endpoint for date-based queries
+            base_url = "https://api.biorxiv.org/details/"
+            
+            # Determine the interval based on query type
+            if self.query and (self.query.isdigit() or self.query.endswith('d')):
+                # For N most recent papers or N days, use the query directly as interval
+                interval = self.query
+            elif self.start_date and self.end_date:
+                # For date range, combine dates with '/'
+                interval = f"{self.start_date}/{self.end_date}"
+            else:
+                # Default to last 30 days
+                interval = "30d"
+            
+            # Format: https://api.biorxiv.org/details/[server]/[interval]/[cursor]
+            path = f"{server}/{interval}/{cursor}/json"
+            url = urllib.parse.urljoin(base_url, path)
+            return url
 
     def _fetch_data(self, url: str) -> Dict[str, Any]:
         """Fetch data from the API with error handling."""

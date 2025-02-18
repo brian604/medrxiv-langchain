@@ -99,7 +99,7 @@ class BioRxivLoader(BaseLoader):
     
     def __init__(
         self,
-        query_builder: Optional[QueryBuilder] = None,
+        query_builder: Optional[Union[QueryBuilder, Dict[str, Any]]] = None,
         query: Optional[str] = None,
         start_date: Optional[str] = None,
         end_date: Optional[str] = None,
@@ -112,7 +112,7 @@ class BioRxivLoader(BaseLoader):
         Initialize the BioRxivLoader.
 
         Args:
-            query_builder (Optional[QueryBuilder]): QueryBuilder instance for complex queries
+            query_builder (Optional[Union[QueryBuilder, Dict[str, Any]]]): QueryBuilder instance or built query dict
             query (Optional[str]): Simple query string (ignored if query_builder is provided)
             start_date (Optional[str]): Start date (ignored if query_builder is provided)
             end_date (Optional[str]): End date (ignored if query_builder is provided)
@@ -122,7 +122,8 @@ class BioRxivLoader(BaseLoader):
             max_workers (int): Maximum number of parallel workers for multiple servers
         """
         if query_builder:
-            params = query_builder.build()
+            # Handle both QueryBuilder instance and built query dict
+            params = query_builder.build() if hasattr(query_builder, 'build') else query_builder
             self.query = params["query"]
             self.start_date = params["start_date"]
             self.end_date = params["end_date"]

@@ -183,38 +183,45 @@ class BioRxivLoader(BaseLoader):
         
         # Determine the interval based on query type
         if self.query and (self.query.isdigit() or self.query.endswith('d')):
-            # Case 1: N most recent papers or N days
+            # For N most recent papers or N days, use the query directly as interval
             interval = self.query
         elif self.start_date and self.end_date:
-            # Case 2: Date range
+            # For date range, combine dates with '/'
             interval = f"{self.start_date}/{self.end_date}"
         else:
-            # Default: last 30 days if no specific query
+            # Default to last 30 days
             interval = "30d"
         
-        path = f"{server}/{interval}/{cursor}"
-        return urllib.parse.urljoin(base_url, path)
+        # Format: https://api.biorxiv.org/details/[server]/[interval]/[cursor]
+        path = f"{server}/{interval}/{cursor}/json"
+        url = urllib.parse.urljoin(base_url, path)
+        return url
 
     def _fetch_data(self, url: str) -> Dict[str, Any]:
         """Fetch data from the API with error handling."""
         try:
             response = self.session.get(url, timeout=self.timeout)
             response.raise_for_status()
-            
-            if "Error : (2002) Connection refused" in response.text:
-                raise ConnectionError(
-                    "API connection refused. Please try again later."
-                )
-                
             data = response.json()
-            if not data.get("collection"):
-                if "no posts found" in str(data).lower():
-                    return {"collection": []}
-                raise ValueError(
-                    "Unexpected API response format. Please check your query parameters."
-                )
-                
+            
+            # Check if we got a valid response with collection
+            if not isinstance(data, dict):
+                raise ValueError(f"Invalid API response format. Expected dict, got {type(data)}")
+            
+            if "collection" not in data:
+                if "messages" in data and data["messages"]:
+                    error_msg = data["messages"][0].get("error", "Unknown error")
+                    raise ValueError(f"API error: {error_msg}")
+                raise ValueError("API response missing 'collection' field")
+            
             return data
+            
+        except requests.exceptions.JSONDecodeError as e:
+            raise ValueError(
+                f"Failed to parse API response as JSON: {str(e)}\n"
+                f"Response text: {response.text[:500]}..."
+            ) from e
+            
         except requests.exceptions.RequestException as e:
             raise ConnectionError(f"Failed to fetch data from API: {str(e)}") from e
 

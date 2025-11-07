@@ -1,0 +1,63 @@
+# BioRxiv/MedRxiv API Configuration
+
+api:
+  title: "BioRxiv/MedRxiv API"
+  version: "1.0.0"
+  description: "API-first backend for fetching and processing preprints"
+
+server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: false
+
+logging:
+  level: "info"
+  format: "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+  file: "logs/api.log"
+
+authentication:
+  enabled: false
+  api_keys: []
+
+processing:
+  summarization:
+    default_engine: "langchain"
+    max_length: 150
+    openai:
+      model: "gpt-3.5-turbo"
+      temperature: 0.7
+    huggingface:
+      model: "facebook/bart-large-cnn"
+
+  semantic_similarity:
+    default_model: "all-MiniLM-L6-v2"
+    top_k: 10
+    threshold: 0.5
+
+cache:
+  enabled: true
+  ttl_seconds: 3600
+  max_size: 1000
+
+rate_limiting:
+  enabled: false
+  requests_per_minute: 60
+
+cors:
+  enabled: true
+  origins:
+    - "*"
+  methods:
+    - "GET"
+    - "POST"
+  headers:
+    - "*"
+
+fetching:
+  default_servers:
+    - "biorxiv"
+  max_results: 1000
+  timeout_seconds: 30
+  retry_count: 3
+  parallel_workers: 2

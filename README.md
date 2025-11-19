@@ -38,27 +38,27 @@ A comprehensive solution for fetching, processing, and analyzing papers from Bio
 ### Basic Installation (LangChain Loader only)
 
 ```bash
-pip install medrxiv-langchain
+uv pip install medrxiv-langchain
 ```
 
 ### API Installation (includes all features)
 
 ```bash
 # Install with API dependencies
-pip install -e ".[api]"
+uv pip install -e ".[api]"
 
 # Or install all dependencies
-pip install -r requirements-api.txt
+uv pip install -r requirements-api.txt
 ```
 
 ### Telegram Bot Installation
 
 ```bash
 # Install with Telegram bot dependencies
-pip install -e ".[telegram]"
+uv pip install -e ".[telegram]"
 
 # Or install everything
-pip install -e ".[all]"
+uv pip install -e ".[all]"
 ```
 
 ## Quick Start

@@ -157,7 +157,7 @@ Summary:"""
             return summary
 
         except ImportError:
-            logger.error("OpenAI package not installed. Install with: pip install openai")
+            logger.error("OpenAI package not installed. Install with: uv pip install openai")
             return self._simple_truncate(text, max_length)
         except Exception as e:
             logger.error(f"Error in OpenAI summarization: {e}")
@@ -196,7 +196,7 @@ class HuggingFaceSummarizer(SummarizationEngine):
                 from transformers import pipeline
                 self.pipeline = pipeline("summarization", model=self.model_name)
             except ImportError:
-                logger.error("Transformers package not installed. Install with: pip install transformers torch")
+                logger.error("Transformers package not installed. Install with: uv pip install transformers torch")
                 raise
             except Exception as e:
                 logger.error(f"Error initializing HuggingFace pipeline: {e}")

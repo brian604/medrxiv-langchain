@@ -41,7 +41,7 @@ class SemanticSimilarityEngine:
             except ImportError:
                 logger.error(
                     "sentence-transformers package not installed. "
-                    "Install with: pip install sentence-transformers"
+                    "Install with: uv pip install sentence-transformers"
                 )
                 raise
             except Exception as e:

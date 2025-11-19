@@ -34,10 +34,10 @@ The BioRxiv/MedRxiv API provides a comprehensive REST API for fetching, processi
 
 ```bash
 # Install with API dependencies
-pip install -e ".[api]"
+uv pip install -e ".[api]"
 
 # Or install all dependencies
-pip install -r requirements-api.txt
+uv pip install -r requirements-api.txt
 ```
 
 ### Running the API Server

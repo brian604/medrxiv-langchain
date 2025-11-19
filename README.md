@@ -2,9 +2,10 @@
 
 A comprehensive solution for fetching, processing, and analyzing papers from BioRxiv and MedRxiv preprint servers.
 
-**Two ways to use this package:**
+**Three ways to use this package:**
 1. **LangChain Loader** - Python library for fetching papers
 2. **REST API** - Full-featured API backend for production deployments
+3. **Telegram Bot** - Conversational interface for searching papers
 
 ## Features
 
@@ -25,6 +26,13 @@ A comprehensive solution for fetching, processing, and analyzing papers from Bio
 - 🔐 **Optional Authentication** with API keys
 - 📚 **Interactive API Docs** with Swagger/ReDoc
 
+### Telegram Bot Features (NEW!)
+- 🤖 **Interactive Bot** with conversational interface
+- 💬 **Easy Commands** - /search, /recent, /export
+- 📱 **Mobile Friendly** - Use from any device
+- 📥 **File Export** - Get JSON/CSV files directly in chat
+- ⚙️ **User Settings** - Personalized preferences
+
 ## Installation
 
 ### Basic Installation (LangChain Loader only)
@@ -43,7 +51,47 @@ pip install -e ".[api]"
 pip install -r requirements-api.txt
 ```
 
+### Telegram Bot Installation
+
+```bash
+# Install with Telegram bot dependencies
+pip install -e ".[telegram]"
+
+# Or install everything
+pip install -e ".[all]"
+```
+
 ## Quick Start
+
+### Option 0: Using the Telegram Bot
+
+1. **Create a bot** via [@BotFather](https://t.me/botfather) on Telegram
+2. **Get your token** from BotFather
+3. **Run the bot:**
+
+```bash
+# Set token and run
+export TELEGRAM_BOT_TOKEN='your_token_here'
+python run_telegram_bot.py
+
+# Or pass token directly
+python run_telegram_bot.py --token 'your_token_here'
+```
+
+4. **Start chatting** with your bot on Telegram!
+
+#### Telegram Bot Commands
+
+| Command | Description | Example |
+|---------|-------------|---------|
+| `/start` | Welcome message | `/start` |
+| `/search <keywords>` | Search for papers | `/search COVID-19 vaccine` |
+| `/recent [days]` | Get recent papers | `/recent 7` |
+| `/servers <choice>` | Set server preference | `/servers both` |
+| `/export [format]` | Export results | `/export csv` |
+| `/summarize` | Summarize last search | `/summarize` |
+| `/health` | Check API status | `/health` |
+| `/help` | Show all commands | `/help` |
 
 ### Option 1: Using the REST API
 

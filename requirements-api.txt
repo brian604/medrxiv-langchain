@@ -17,3 +17,6 @@ aiofiles>=23.0.0
 # Optional: for better performance
 python-jose[cryptography]>=3.3.0  # JWT authentication
 passlib[bcrypt]>=1.7.4  # Password hashing
+
+# Telegram bot
+python-telegram-bot>=20.0

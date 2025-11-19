@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="medrxiv-langchain",
-    version="0.1.0",
+    version="1.1.0",
     packages=find_packages(),
     install_requires=[
         "langchain>=0.0.200",
@@ -19,6 +19,9 @@ setup(
             "openai>=1.0.0",
             "aiofiles>=23.0.0",
         ],
+        "telegram": [
+            "python-telegram-bot>=20.0",
+        ],
         "all": [
             "fastapi>=0.104.0",
             "uvicorn[standard]>=0.24.0",
@@ -27,6 +30,7 @@ setup(
             "sentence-transformers>=2.2.0",
             "openai>=1.0.0",
             "aiofiles>=23.0.0",
+            "python-telegram-bot>=20.0",
         ],
     },
     author="Your Name",
